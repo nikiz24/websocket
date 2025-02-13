@@ -279,6 +279,8 @@ type Conn struct {
 
 	readDecompress         bool // whether last read frame had RSV1 set
 	newDecompressionReader func(io.Reader) io.ReadCloser
+
+	warnings []string
 }
 
 func newConn(conn net.Conn, isServer bool, readBufferSize, writeBufferSize int, writeBufferPool BufferPool, br *bufio.Reader, writeBuf []byte) *Conn {
@@ -833,16 +835,16 @@ func (c *Conn) advanceFrame() (int, error) {
 		if c.newDecompressionReader != nil {
 			c.readDecompress = true
 		} else {
-			errors = append(errors, "RSV1 set")
+			c.warnings = append(c.warnings, "RSV1 set but no decompression")
 		}
 	}
 
 	if rsv2 {
-		errors = append(errors, "RSV2 set")
+		c.warnings = append(c.warnings, "RSV2 set")
 	}
 
 	if rsv3 {
-		errors = append(errors, "RSV3 set")
+		c.warnings = append(c.warnings, "RSV3 set")
 	}
 
 	switch frameType {
@@ -1243,4 +1245,11 @@ func FormatCloseMessage(closeCode int, text string) []byte {
 	binary.BigEndian.PutUint16(buf, uint16(closeCode))
 	copy(buf[2:], text)
 	return buf
+}
+
+// GetWarnings returns the warnings and clears them.
+func (c *Conn) GetWarnings() []string {
+	warnings := c.warnings
+	c.warnings = nil // empty the warnings
+	return warnings
 }
